@@ -6,12 +6,20 @@ from app.core.security import verify_rapidapi_proxy_secret
 from app.schemas.trends import HashtagsTrendResponse, SoundsTrendResponse
 from app.services.trends_service import TrendsService
 from app.utils.pagination import PaginationParams, pagination_params
+from app.utils.query_params import normalize_optional_str
 
 router = APIRouter(
     prefix="/trends",
     tags=["Trends"],
     dependencies=[Depends(verify_rapidapi_proxy_secret)],
 )
+
+
+def _clean_country_code(country_code: str | None) -> str | None:
+    country_code = normalize_optional_str(country_code)
+    if country_code:
+        country_code = country_code.upper()[:2]
+    return country_code
 
 
 @router.get(
@@ -25,12 +33,14 @@ router = APIRouter(
     ),
 )
 async def get_trending_sounds(
-    country_code: str | None = Query(None, min_length=2, max_length=2, examples=["US"]),
+    country_code: str | None = Query(None, examples=["US"]),
     pagination: PaginationParams = Depends(pagination_params),
     service: TrendsService = Depends(get_trends_service),
 ) -> SoundsTrendResponse:
     return await service.get_trending_sounds(
-        country_code=country_code, page=pagination.page, page_size=pagination.page_size
+        country_code=_clean_country_code(country_code),
+        page=pagination.page,
+        page_size=pagination.page_size,
     )
 
 
@@ -44,14 +54,15 @@ async def get_trending_sounds(
     ),
 )
 async def get_trending_hashtags(
-    country_code: str | None = Query(None, min_length=2, max_length=2, examples=["US"]),
+    country_code: str | None = Query(None, examples=["US"]),
     industry_id: str | None = Query(None, examples=["Fashion & Apparel"]),
     pagination: PaginationParams = Depends(pagination_params),
     service: TrendsService = Depends(get_trends_service),
 ) -> HashtagsTrendResponse:
     return await service.get_trending_hashtags(
-        country_code=country_code,
-        industry_id=industry_id,
+        country_code=_clean_country_code(country_code),
+        industry_id=normalize_optional_str(industry_id),
         page=pagination.page,
         page_size=pagination.page_size,
     )
+

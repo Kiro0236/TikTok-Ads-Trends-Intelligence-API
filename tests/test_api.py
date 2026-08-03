@@ -34,6 +34,33 @@ def test_ads_search_returns_200_with_expected_shape(client):
             assert field in first
 
 
+def test_ads_search_tolerates_json_quoted_country_code(client):
+    """Regression test: some API marketplace testing consoles send a text
+    field JSON-encoded (e.g. the literal characters "US" including quotes)
+    instead of a plain string, which used to trigger a 422 from the
+    Query(min_length=2, max_length=2) constraint."""
+    resp = client.get(
+        "/ads/search", params={"country_code": '"US"', "page_size": 1}
+    )
+    assert resp.status_code == 200
+    if resp.json()["items"]:
+        assert resp.json()["items"][0]["country_code"] == "US"
+
+
+def test_ads_search_tolerates_json_array_wrapped_country_code(client):
+    resp = client.get(
+        "/ads/search", params={"country_code": '["US"]', "page_size": 1}
+    )
+    assert resp.status_code == 200
+    if resp.json()["items"]:
+        assert resp.json()["items"][0]["country_code"] == "US"
+
+
+def test_ads_search_tolerates_empty_string_country_code(client):
+    resp = client.get("/ads/search", params={"country_code": ""})
+    assert resp.status_code == 200
+
+
 def test_ads_search_default_params_returns_200(client):
     resp = client.get("/ads/search")
     assert resp.status_code == 200
