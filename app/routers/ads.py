@@ -34,7 +34,7 @@ async def search_ads(
     keyword: str | None = Query(...),
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
-    sort_by: SortBy = Query(SortBy.popularity),
+    sort_by: str = Query("popularity", description="Sort signal: popularity, ctr, impressions, engagement"),
     pagination: PaginationParams = Depends(pagination_params),
     service: AdsService = Depends(get_ads_service),
 ) -> AdsSearchResponse:
