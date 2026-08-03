@@ -29,7 +29,13 @@ router = APIRouter(
     ),
 )
 async def search_ads(
-    country_code: str | None = Query(None, examples=["US"]),
+    country_code: str | None = Query(
+        None,
+        examples=["US"],
+        description="Two-letter country code (e.g. 'US'). Extra whitespace, "
+        "quotes, or array-wrapping from the calling client are tolerated "
+        "and cleaned up automatically.",
+    ),
     industry_id: str | None = Query(None, examples=["Beauty & Personal Care"]),
     keyword: str | None = Query(None, examples=["skincare"]),
     date_from: date | None = Query(None, description="Inclusive start of the date range."),
@@ -38,24 +44,17 @@ async def search_ads(
     pagination: PaginationParams = Depends(pagination_params),
     service: AdsService = Depends(get_ads_service),
 ) -> AdsSearchResponse:
-    
-    # 1. Normalizzazione sicura
-    clean_country = normalize_optional_str(country_code)
-    if clean_country:
-        clean_country = clean_country.upper()[:2]
-
-    clean_industry = normalize_optional_str(industry_id)
-    clean_keyword = normalize_optional_str(keyword)
-
-    # 2. Fallback per evitare l'errore 500 quando i campi sono vuoti
-    final_country = clean_country or "any"
-    final_industry = clean_industry or "any"
-    final_keyword = clean_keyword or "any"
+    country_code = normalize_optional_str(country_code)
+    if country_code:
+        # Tolerate a client sending more than 2 characters (e.g. stray
+        # wrapping we couldn't fully unwrap) by taking a safe, well-formed
+        # value instead of hard-failing the request.
+        country_code = country_code.upper()[:2]
 
     return await service.search_ads(
-        country_code=final_country,
-        industry_id=final_industry,
-        keyword=final_keyword,
+        country_code=country_code,
+        industry_id=normalize_optional_str(industry_id),
+        keyword=normalize_optional_str(keyword),
         date_from=date_from,
         date_to=date_to,
         sort_by=sort_by,
