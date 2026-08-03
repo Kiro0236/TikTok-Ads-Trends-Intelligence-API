@@ -29,16 +29,17 @@ router = APIRouter(
     ),
 )
 async def search_ads(
-    country_code: str | None = Query(...),
-    industry_id: str | None = Query(...),
-    keyword: str | None = Query(...),
-    date_from: date | None = Query(None),
-    date_to: date | None = Query(None),
-    sort_by: str = Query("popularity", description="Sort signal: popularity, ctr, impressions, engagement"),
+    country_code: str | None = Query(None, examples=["US"]),
+    industry_id: str | None = Query(None, examples=["Beauty & Personal Care"]),
+    keyword: str | None = Query(None, examples=["skincare"]),
+    date_from: date | None = Query(None, description="Inclusive start of the date range."),
+    date_to: date | None = Query(None, description="Inclusive end of the date range."),
+    sort_by: SortBy = Query(SortBy.popularity),
     pagination: PaginationParams = Depends(pagination_params),
     service: AdsService = Depends(get_ads_service),
 ) -> AdsSearchResponse:
-    # 1. Normalizzazione
+    
+    # 1. Normalizzazione sicura
     clean_country = normalize_optional_str(country_code)
     if clean_country:
         clean_country = clean_country.upper()[:2]
@@ -46,7 +47,7 @@ async def search_ads(
     clean_industry = normalize_optional_str(industry_id)
     clean_keyword = normalize_optional_str(keyword)
 
-    # 2. Fallback "any" se sono None (EVITA L'ERRORE 500)
+    # 2. Fallback per evitare l'errore 500 quando i campi sono vuoti
     final_country = clean_country or "any"
     final_industry = clean_industry or "any"
     final_keyword = clean_keyword or "any"
