@@ -148,13 +148,42 @@ All errors follow one consistent JSON envelope:
 }
 ```
 
+## Troubleshooting: every route returns `{"detail":"Not Found"}`
+
+**Root cause, confirmed via Vercel runtime logs:** Vercel's `rewrites` mechanism performs a literal URL rewrite — it replaces the incoming request path with the `destination` string before the request reaches the app. A config like:
+
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }] }
+```
+
+rewrites **every** incoming path (`/health`, `/ads/search`, anything) to the literal path `/api/index`. Since no FastAPI route matches `/api/index`, every request 404s — including `/health`, which explains why the failure was universal rather than endpoint-specific.
+
+`vercel.json` in this project now uses the legacy `version: 2` `builds`/`routes` format instead:
+
+```json
+{
+  "version": 2,
+  "builds": [{ "src": "api/index.py", "use": "@vercel/python" }],
+  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
+}
+```
+
+The key difference: `routes`/`dest` selects *which function* handles a request without rewriting the path — FastAPI receives the original, unmodified path (`/health`, `/ads/search`, etc.) exactly as our route definitions expect. This is the standard, proven pattern for serving a FastAPI app with root-level (non-`/api`-prefixed) routes from a single Vercel Python function.
+
+If you still see blanket 404s after this change, it's very unlikely to be a code issue — check, in order:
+
+1. **Vercel dashboard → Logs tab** for the failing request. Zero runtime logs means the function was never invoked at all (a project-settings issue, see below); logs showing the function ran but still 404'd means something is still off in routing/path handling.
+2. **Project → Settings → General → Root Directory** — must be empty/unset if `vercel.json` sits at this repo's root.
+3. **Project → Settings → General → Framework Preset** — should be "Other", not an auto-detected Node/Next.js preset from an earlier experiment.
+4. **Redeploy explicitly** after this `vercel.json` change — don't rely on it being picked up automatically.
+
 ## Deploying to Vercel
 
 ```bash
 vercel deploy
 ```
 
-`vercel.json` points Vercel at `api/index.py` as the single Vercel Function and rewrites every path (`/ads/*`, `/trends/*`, `/health`, `/docs`, `/openapi.json`) to it, since the app's routes live at the root rather than under `/api`. `.python-version` pins the runtime to Python 3.12, matching what's declared here and avoiding drift if Vercel's default version changes. No other configuration is required — Python dependencies are installed automatically from `requirements.txt`.
+`vercel.json` points Vercel at `api/index.py` as the single Vercel Function via the `builds`/`routes` mechanism, which preserves each request's original path (`/ads/*`, `/trends/*`, `/health`, `/docs`, `/openapi.json`) rather than rewriting it — required since the app's routes live at the root rather than under `/api`. `.python-version` pins the runtime to Python 3.12, matching what's declared here and avoiding drift if Vercel's default version changes. No other configuration is required — Python dependencies are installed automatically from `requirements.txt`.
 
 ## Importing into RapidAPI Studio
 
@@ -175,9 +204,3 @@ Note: the `X-RapidAPI-Proxy-Secret` header itself is intentionally excluded from
    your new class when `settings.data_provider_mode == "live"`.
 
 No router, service, schema, or cache code needs to change.
-
-## A note on how this was built
-
-The implementation of this project was developed with AI assistance
-(Claude, Anthropic). Architecture decisions, data-source vetting, and
-security/monetization strategy were directed and validated by the project owner.
